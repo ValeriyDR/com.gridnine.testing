@@ -9,3 +9,91 @@
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
+package com.gridnine.testing;
+
+import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Интерфейс фильтра для перелетов.
+ */
+interface FlightFilter {
+    boolean test(Flight flight);
+}
+
+/**
+ * Фильтр: исключает перелёты с вылетом до текущего момента.
+ */
+class DepartureBeforeNowFilter implements FlightFilter {
+    @Override
+    public boolean test(Flight flight) {
+        return flight.getSegments().stream()
+                .anyMatch(segment -> segment.getDepartureDate().isBefore(LocalDateTime.now()));
+    }
+}
+
+/**
+ * Фильтр: исключает перелёты с сегментами, где дата прилёта раньше даты вылета.
+ */
+class ArrivalBeforeDepartureFilter implements FlightFilter {
+    @Override
+    public boolean test(Flight flight) {
+        return flight.getSegments().stream()
+                .anyMatch(segment -> segment.getArrivalDate().isBefore(segment.getDepartureDate()));
+    }
+}
+
+/**
+ * Фильтр: исключает перелёты, где общее время на земле превышает 2 часа.
+ */
+class ExcessiveGroundTimeFilter implements FlightFilter {
+    private static final Duration MAX_GROUND_TIME = Duration.ofHours(2);
+    
+    @Override
+    public boolean test(Flight flight) {
+        List<Segment> segments = flight.getSegments();
+        long totalGroundTime = 0;
+        for (int i = 1; i < segments.size(); i++) {
+            Duration groundTime = Duration.between(segments.get(i - 1).getArrivalDate(), segments.get(i).getDepartureDate());
+            totalGroundTime += groundTime.toMinutes();
+            if (groundTime.compareTo(MAX_GROUND_TIME) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+/**
+ * Класс обработки фильтрации.
+ */
+class FlightFilterProcessor {
+    static List<Flight> filterFlights(List<Flight> flights, FlightFilter filter) {
+        return flights.stream()
+                .filter(flight -> !filter.test(flight))
+                .collect(Collectors.toList());
+    }
+}
+
+/**
+ * Главный класс для запуска программы.
+ */
+public class Main {
+    public static void main(String[] args) {
+        List<Flight> flights = FlightBuilder.createFlights();
+
+        System.out.println("Все доступные перелёты:");
+        flights.forEach(System.out::println);
+        
+        System.out.println("\nФильтрация: Исключение перелётов с вылетом до текущего момента:");
+        FlightFilterProcessor.filterFlights(flights, new DepartureBeforeNowFilter()).forEach(System.out::println);
+        
+        System.out.println("\nФильтрация: Исключение перелётов с сегментами, где прилёт раньше вылета:");
+        FlightFilterProcessor.filterFlights(flights, new ArrivalBeforeDepartureFilter()).forEach(System.out::println);
+        
+        System.out.println("\nФильтрация: Исключение перелётов с временем на земле более 2 часов:");
+        FlightFilterProcessor.filterFlights(flights, new ExcessiveGroundTimeFilter()).forEach(System.out::println);
+    }
+}
